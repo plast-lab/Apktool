@@ -14,6 +14,8 @@
  *  limitations under the License.
  */
 apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'maven-publish'
 
 dependencies {
     implementation depends.commons_cli
@@ -80,3 +82,54 @@ task proguard(type: proguard.gradle.ProGuardTask, dependsOn: shadowJar) {
 
 proguard.dependsOn cleanOutputDirectory
 tasks.getByPath(':release').dependsOn(proguard)
+
+version = project.apktool_version.replace('-SNAPSHOT', '')
+version = version.substring(0, version.lastIndexOf('-'))
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier.set('sources')
+    from sourceSets.main.allSource
+}
+
+shadowJar {
+    // Set classifier to "null", to make the shadow JAR the main published artifact.
+    archiveClassifier.set(null)
+}
+
+artifacts {
+    shadowJar
+    archives sourcesJar
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact shadowJar
+        }
+    }
+}
+
+// Upload to bintray with:
+//   ../../gradlew clean build bintrayUpload --info
+// Needs properties: bintray_user, bintray_key.
+if (project.hasProperty('bintray_user') && project.hasProperty('bintray_key')) {
+    bintray {
+        user = bintray_user
+        key = bintray_key
+        publications = ['mavenJava']
+        configurations = ['archives']
+        pkg {
+            repo = 'plast-lab'
+            name = 'apktool'
+            desc = 'The Apktool reverse engineering tool.'
+            licenses = ['Apache 2.0']
+            labels = ['java']
+            vcsUrl = 'https://github.com/iBotPeaches/Apktool'
+            version {
+                name = project.version
+                released = new Date()
+                vcsTag = project.version
+            }
+        }
+    }
+}
